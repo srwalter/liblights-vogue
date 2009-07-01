@@ -3,6 +3,8 @@
 #include <errno.h>
 #include <stdlib.h>
 #include <fcntl.h>
+#include <string.h>
+#include <stdio.h>
 #include "hardware.h"
 #include "lights.h"
 
@@ -10,6 +12,8 @@ enum WhichLight {
     BATTERY,
     NOTIFICATION,
     ATTENTION,
+    BACKLIGHT,
+    BUTTONS,
 };
 
 struct vogue_light_t {
@@ -78,7 +82,26 @@ static int vogue_set_light (struct light_device_t *dev,
                 write_sys("/sys/class/leds/status-amber/brightness", "1");
             break;
 
+        case BUTTONS:
+            system("echo buttons >> /sdcard/lights");
+            if ((state->color & 0xffffff) == 0)
+                write_sys("/sys/class/leds/button-backlight/brightness", "0");
+            else
+                write_sys("/sys/class/leds/button-backlight/brightness", "1");
             break;
+
+        case BACKLIGHT: {
+            char val[16];
+            unsigned char bright;
+            int color = state->color;
+
+            bright = ((77*((color>>16)&0x00ff)) + (150*((color>>8)&0x00ff)) + (29*(color&0x00ff))) >> 8;
+            snprintf(val, 16, "%d", bright);
+            system("echo backlight >> /sdcard/lights");
+            write_sys("/sys/class/leds/lcd-backlight/brightness",
+                      val);
+            break;
+        }
     }
 
     return 0;
@@ -113,6 +136,10 @@ static int vogue_lights_open (const struct hw_module_t *module,
         dev = alloc_vogue_light (module, NOTIFICATION);
     } else if (!strcmp("attention", id)) {
         dev = alloc_vogue_light (module, ATTENTION);
+    } else if (!strcmp("backlight", id)) {
+        dev = alloc_vogue_light (module, BACKLIGHT);
+    } else if (!strcmp("buttons", id)) {
+        dev = alloc_vogue_light (module, BUTTONS);
     } else {
         system("echo open fail >> /sdcard/lights");
         *pdev = NULL;
