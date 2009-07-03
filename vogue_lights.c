@@ -26,17 +26,22 @@ static int vogue_lights_close (struct hw_device_t *device)
     return 0;
 }
 
-static void write_sys (char *file, char *val)
+static void write_sys (char *file, int val)
 {
     int fd = open(file, O_WRONLY);
+    char buf[16];
     int rc;
 
+    snprintf(buf, 16, "%d\n", val);
+
     if (fd < 0)
-        return;
+        goto out;
 
     do {
-        rc = write(fd, val, strlen(val));
+        rc = write(fd, buf, strlen(buf));
     } while (rc < 0 && errno == EINTR);
+
+out:
     close (fd);
 }
 
@@ -44,62 +49,53 @@ static int vogue_set_light (struct light_device_t *dev,
                             struct light_state_t const* state)
 {
     struct vogue_light_t *light = (struct vogue_light_t *)dev;
+    int flash = 0;
 
     system("echo set light >> /sdcard/lights");
 
     switch (light->which) {
         case BATTERY:
             system("echo battery >> /sdcard/lights");
-            if (state->flashMode == LIGHT_FLASH_NONE)
-                write_sys("/sys/class/vogue_hw/led_flash", "0");
-            else
-                write_sys("/sys/class/vogue_hw/led_flash", "1");
+            if (state->flashMode != LIGHT_FLASH_NONE)
+                flash = 6;
 
             if (state->color & 0xff0000)
-                write_sys("/sys/class/leds/status-red/brightness", "1");
+                write_sys("/sys/class/leds/red/brightness", 1 | flash);
             else
-                write_sys("/sys/class/leds/status-red/brightness", "0");
+                write_sys("/sys/class/leds/red/brightness", 0);
 
             if (state->color & 0xff00)
-                write_sys("/sys/class/leds/status-green/brightness", "1");
+                write_sys("/sys/class/leds/green/brightness", 1 | flash);
             else
-                write_sys("/sys/class/leds/status-green/brightness", "0");
+                write_sys("/sys/class/leds/green/brightness", 0);
             break;
 
         case NOTIFICATION:
             system("echo note >> /sdcard/lights");
             if ((state->color & 0xffffff) == 0)
-                write_sys("/sys/class/leds/status-blue/brightness", "0");
+                write_sys("/sys/class/leds/blue/brightness", 0);
             else
-                write_sys("/sys/class/leds/status-blue/brightness", "1");
+                write_sys("/sys/class/leds/blue/brightness", 1);
             break;
 
         case ATTENTION:
-            system("echo attention >> /sdcard/lights");
-            if ((state->color & 0xffffff) == 0)
-                write_sys("/sys/class/leds/status-amber/brightness", "0");
-            else
-                write_sys("/sys/class/leds/status-amber/brightness", "1");
             break;
 
         case BUTTONS:
             system("echo buttons >> /sdcard/lights");
             if ((state->color & 0xffffff) == 0)
-                write_sys("/sys/class/leds/button-backlight/brightness", "0");
+                write_sys("/sys/class/leds/button-backlight/brightness", 0);
             else
-                write_sys("/sys/class/leds/button-backlight/brightness", "1");
+                write_sys("/sys/class/leds/button-backlight/brightness", 1);
             break;
 
         case BACKLIGHT: {
-            char val[16];
             unsigned char bright;
             int color = state->color;
 
             bright = ((77*((color>>16)&0x00ff)) + (150*((color>>8)&0x00ff)) + (29*(color&0x00ff))) >> 8;
-            snprintf(val, 16, "%d", bright);
             system("echo backlight >> /sdcard/lights");
-            write_sys("/sys/class/leds/lcd-backlight/brightness",
-                      val);
+            write_sys("/sys/class/leds/lcd-backlight/brightness", bright);
             break;
         }
     }
