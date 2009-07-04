@@ -14,12 +14,20 @@ enum WhichLight {
     ATTENTION,
     BACKLIGHT,
     BUTTONS,
+    MAX_LIGHT
 };
 
 struct vogue_light_t {
     struct light_device_t light;
     enum WhichLight which;
 };
+
+struct light_state {
+    int color;
+    int flashing;
+};
+
+static struct light_state lights[MAX_LIGHT];
 
 static int vogue_lights_close (struct hw_device_t *device)
 {
@@ -45,6 +53,39 @@ out:
     close (fd);
 }
 
+static void set_light (struct light_state *state, int flash)
+{
+    int red = state->color & 0xff0000;
+    int green = state->color & 0xff00;
+    int blue = state->color & 0xff;
+
+    if (blue > red && blue > green) {
+        write_sys("/sys/class/leds/blue/brightness", 1);
+    } else {
+        if (red)
+            write_sys("/sys/class/leds/red/brightness", 1 | flash);
+        if (green)
+            write_sys("/sys/class/leds/green/brightness", 1 | flash);
+    }
+}
+
+static void update_lights (void)
+{
+    write_sys("/sys/class/leds/red/brightness", 0);
+    write_sys("/sys/class/leds/green/brightness", 0);
+    write_sys("/sys/class/leds/blue/brightness", 0);
+
+    if (lights[BATTERY].color && lights[BATTERY].flashing) {
+        set_light(&lights[BATTERY], lights[BATTERY].flashing ? 2 : 0);
+    } else if (lights[ATTENTION].color) {
+        set_light(&lights[ATTENTION], lights[ATTENTION].flashing ? 6 : 0);
+    } else if (lights[NOTIFICATION].color) {
+        set_light(&lights[NOTIFICATION], lights[NOTIFICATION].flashing ? 6 : 0);
+    } else if (lights[BATTERY].color) {
+        set_light(&lights[BATTERY], 0);
+    }
+}
+
 static int vogue_set_light (struct light_device_t *dev,
                             struct light_state_t const* state)
 {
@@ -53,34 +94,10 @@ static int vogue_set_light (struct light_device_t *dev,
 
     system("echo set light >> /sdcard/lights");
 
+    if (light->which > MAX_LIGHT)
+        return -1;
+
     switch (light->which) {
-        case BATTERY:
-            system("echo battery >> /sdcard/lights");
-            if (state->flashMode != LIGHT_FLASH_NONE)
-                flash = 6;
-
-            if (state->color & 0xff0000)
-                write_sys("/sys/class/leds/red/brightness", 1 | flash);
-            else
-                write_sys("/sys/class/leds/red/brightness", 0);
-
-            if (state->color & 0xff00)
-                write_sys("/sys/class/leds/green/brightness", 1 | flash);
-            else
-                write_sys("/sys/class/leds/green/brightness", 0);
-            break;
-
-        case NOTIFICATION:
-            system("echo note >> /sdcard/lights");
-            if ((state->color & 0xffffff) == 0)
-                write_sys("/sys/class/leds/blue/brightness", 0);
-            else
-                write_sys("/sys/class/leds/blue/brightness", 1);
-            break;
-
-        case ATTENTION:
-            break;
-
         case BUTTONS:
             system("echo buttons >> /sdcard/lights");
             if ((state->color & 0xffffff) == 0)
@@ -98,6 +115,13 @@ static int vogue_set_light (struct light_device_t *dev,
             write_sys("/sys/class/leds/lcd-backlight/brightness", bright);
             break;
         }
+
+        default:
+            system("echo set light default >> /sdcard/lights");
+            lights[light->which].flashing = 
+                (state->flashMode != LIGHT_FLASH_NONE);
+            lights[light->which].color = state->color;
+            update_lights();
     }
 
     return 0;
