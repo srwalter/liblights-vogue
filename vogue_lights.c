@@ -92,14 +92,14 @@ static int vogue_set_light (struct light_device_t *dev,
     struct vogue_light_t *light = (struct vogue_light_t *)dev;
     int flash = 0;
 
-    system("echo set light >> /sdcard/lights");
+    //system("echo set light >> /sdcard/lights");
 
     if (light->which > MAX_LIGHT)
         return -1;
 
     switch (light->which) {
         case BUTTONS:
-            system("echo buttons >> /sdcard/lights");
+            //system("echo buttons >> /sdcard/lights");
             if ((state->color & 0xffffff) == 0)
                 write_sys("/sys/class/leds/button-backlight/brightness", 0);
             else
@@ -111,13 +111,13 @@ static int vogue_set_light (struct light_device_t *dev,
             int color = state->color;
 
             bright = ((77*((color>>16)&0x00ff)) + (150*((color>>8)&0x00ff)) + (29*(color&0x00ff))) >> 8;
-            system("echo backlight >> /sdcard/lights");
+            //system("echo backlight >> /sdcard/lights");
             write_sys("/sys/class/leds/lcd-backlight/brightness", bright);
             break;
         }
 
         default:
-            system("echo set light default >> /sdcard/lights");
+            //system("echo set light default >> /sdcard/lights");
             lights[light->which].flashing = 
                 (state->flashMode != LIGHT_FLASH_NONE);
             lights[light->which].color = state->color;
@@ -133,7 +133,7 @@ struct hw_device_t *alloc_vogue_light (const struct hw_module_t *module,
 {
     struct vogue_light_t *light = malloc(sizeof(struct vogue_light_t));
 
-    system("echo alloc >> /sdcard/lights");
+    //system("echo alloc >> /sdcard/lights");
     light->light.common.tag = HARDWARE_DEVICE_TAG;
     light->light.common.module = (struct hw_module_t *)module;
     light->light.common.close = vogue_lights_close;
@@ -161,7 +161,7 @@ static int vogue_lights_open (const struct hw_module_t *module,
     } else if (!strcmp("buttons", id)) {
         dev = alloc_vogue_light (module, BUTTONS);
     } else {
-        system("echo open fail >> /sdcard/lights");
+        //system("echo open fail >> /sdcard/lights");
         *pdev = NULL;
         return -1;
     }
